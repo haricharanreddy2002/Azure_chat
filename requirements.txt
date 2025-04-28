@@ -1,0 +1,20 @@
+nest_asyncio
+chromadb
+llama-index
+fitz  # Comes with PyMuPDF, so use pymupdf instead
+opencv-python
+numpy
+gTTS
+Pillow
+pytesseract
+python-Levenshtein
+fuzzywuzzy
+fastapi
+python-dotenv
+pydantic
+pdf2image
+pandas
+huggingface_hub
+requests
+uvicorn
+gunicorn
