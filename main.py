@@ -25,6 +25,7 @@ import pandas as pd
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+import codecs
 
 # Load environment variables
 load_dotenv()
@@ -50,6 +51,7 @@ def multiple_image(query):
     df = pd.read_excel(excel_path)
 
     query = query.lower()
+    image_list=[]
     for _, row in df.iterrows():
         question = str(row['Question']).strip()
         if question == query:
@@ -68,7 +70,7 @@ def multiple_image(query):
             except ValueError:
                 print(f"❌ Invalid page numbers: {page_numbers}")
                 continue
-
+                        
             for page_num in page_list:
                 try:
                     images = convert_from_path(
@@ -82,9 +84,11 @@ def multiple_image(query):
                         img_name = f"{safe_question}_page_{page_num}.png"
                         img.save(os.path.join(output_folder, img_name))
                         print(f"✅ Saved: {img_name}")
+                        img_name=f"https://chatbot.chervicaon.com/output_images/{img_name}"
+                        image_list.append(img_name)
                 except Exception as e:
                     print(f"❌ Error processing {pdf_path} page {page_num}: {e}")
-    return page_list
+    return page_list,image_list
 
 # Pydantic model for query input
 class QueryInput(BaseModel):
@@ -284,6 +288,13 @@ def save_to_json(query_id, query_text, response, page_number=None, img_path=None
         json.dump(data, f, indent=4)
     return data[query_id]
 
+
+def save_to_json1(response):
+    with open(JSON_FILE, "w", encoding="utf-8") as f:
+        json.dump(response, f, ensure_ascii=False, indent=4)
+ 
+
+
 # Function to check cached query
 def check_cached_query(query_text, max_age_hours=24):
     query_text_lower = query_text.lower()
@@ -295,7 +306,7 @@ def check_cached_query(query_text, max_age_hours=24):
     with open(JSON_FILE, 'r') as f:
         data = json.load(f)
         for query_id, entry in data.items():
-            if entry["query"].lower() == query_text_lower:
+            if isinstance(entry, dict) and entry["query"].lower() == query_text_lower:
                 timestamp = datetime.fromisoformat(entry["timestamp"])
                 age = (datetime.now() - timestamp).total_seconds() / 3600
                 if age < max_age_hours:
@@ -401,22 +412,27 @@ app.mount("/outputs/images", StaticFiles(directory="outputs/images"), name="imag
 app.mount("/outputs/audio", StaticFiles(directory="outputs/audio"), name="audio")
 app.mount("/uploads", StaticFiles(directory="uploads"), name="pdf")
 
+
 @app.post("/query")
 async def handle_query(value: str):
     query = value
     response = main_method(query)
-    page_list = multiple_image(query)
+    page_list,image_list = multiple_image(query)
     if page_list != []:
         page = ",".join(str(item) for item in page_list).replace('"', '')
-        response['page_number'] = page
-    image_filename=response["image_path"]
+        response['page_number'] = page 
+        img_string=", ".join(image_list)
+        response['image_path']= img_string
+    else:
+        image_filename=response["image_path"]
+        response["image_path"]=f"https://chatbot.chervicaon.com/outputs/images/{image_filename}"
     audio_filename=response["audio_path"]
-    
-    response["image_path"]=f"https://chatbot.chervicaon.com/outputs/images/{image_filename}"
+    pdf_filename=response["pdf_path"]
     response["audio_path"]=f"https://chatbot.chervicaon.com/outputs/audio/{audio_filename}"
+    response["pdf_path"]=f"https://chatbot.chervicaon.com/uploads/{pdf_filename}"
     if "steps:" in response['response'].lower():
-        print(response['response'])
-        response['response'] = response['response'].replace("\\n", "")
+        response['response'] = response['response'].replace("\n\n", "\n")
+    save_to_json1(response)
     return response
 
 if __name__ == "__main__":
