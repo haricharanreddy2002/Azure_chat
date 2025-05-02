@@ -22,6 +22,9 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 from pdf2image import convert_from_path
 import pandas as pd
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
 
 # Load environment variables
 load_dotenv()
@@ -385,6 +388,19 @@ def main_method(query_text):
 
 app = FastAPI()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://s3.ariba.com"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+ 
+
+app.mount("/outputs/images", StaticFiles(directory="outputs/images"), name="images")
+app.mount("/outputs/audio", StaticFiles(directory="outputs/audio"), name="audio")
+app.mount("/uploads", StaticFiles(directory="uploads"), name="pdf")
+
 @app.post("/query")
 async def handle_query(value: str):
     query = value
@@ -393,8 +409,15 @@ async def handle_query(value: str):
     if page_list != []:
         page = ",".join(str(item) for item in page_list).replace('"', '')
         response['page_number'] = page
+    image_filename=response["image_path"]
+    audio_filename=response["audio_path"]
+    
+    response["image_path"]=f"https://chatbot.chervicaon.com/outputs/images/{image_filename}"
+    response["audio_path"]=f"https://chatbot.chervicaon.com/outputs/audio/{audio_filename}"
+    if "steps:" in response['response'].lower():
+        print(response['response'])
+        response['response'] = response['response'].replace("\\n", "")
     return response
 
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)
